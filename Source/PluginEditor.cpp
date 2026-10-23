@@ -33,12 +33,13 @@ void drawPanel (juce::Graphics& g, juce::Rectangle<float> r, const FontSet& font
 {
     g.setColour (juce::Colours::black.withAlpha (0.35f));
     g.fillRoundedRectangle (r.translated (0.0f, 3.0f), 16.0f);
-    g.setGradientFill (juce::ColourGradient (pal::deep2.withAlpha (0.78f), r.getX(), r.getY(), pal::deep.withAlpha (0.62f), r.getX(), r.getBottom(), false));
-    g.fillRoundedRectangle (r, 16.0f);
+    // verre sombre (DA PRO SERIES) : charbon, reflet rose pâle très léger en haut, filet fin
+    g.setColour (pal::deep.withAlpha (0.94f));
+    g.fillRoundedRectangle (r, 12.0f);
+    g.setGradientFill (juce::ColourGradient (pal::rose.withAlpha (0.035f), r.getX(), r.getY(), pal::rose.withAlpha (0.0f), r.getX(), r.getY() + r.getHeight() * 0.7f, false));
+    g.fillRoundedRectangle (r, 12.0f);
     g.setColour (pal::line());
-    g.drawRoundedRectangle (r.reduced (0.5f), 16.0f, 1.0f);
-    g.setColour (pal::rose.withAlpha (0.07f));
-    g.drawHorizontalLine ((int) r.getY() + 1, r.getX() + 18.0f, r.getRight() - 18.0f);
+    g.drawRoundedRectangle (r.reduced (0.5f), 12.0f, 1.0f);
     drawEyebrow (g, fonts, title, r.getX() + 16.0f, r.getY() + 17.0f);
 }
 
@@ -1317,7 +1318,7 @@ struct OniriqueReverbEditor::Content : public juce::Component
         const auto brand = fonts->displayFont (17.0f, 0.1f);
         glowText (g, "ONIRIQUE", brand, 68.0f, 37.0f, pal::mist, 1.5f);
         const float bw = juce::GlyphArrangement::getStringWidth (brand, "ONIRIQUE");
-        glowText (g, "Verb", fonts->dreamFont (38.0f), 68.0f + bw + 10.0f, 40.0f, pal::ember.brighter (0.15f), 6.0f);
+        glowText (g, "VERB", brand, 68.0f + bw + 10.0f, 37.0f, pal::ember, 1.5f);
 
         // la scène sous le PORTAIL : le sélecteur flotte dans un trait de lumière
         {
@@ -1404,6 +1405,11 @@ OniriqueReverbEditor::OniriqueReverbEditor (OniriqueReverbProcessor& p)
    #if ! ONIRIQUE_TEST_BUILD   // la version d'essai locale n'a pas de licence
     licenseOverlay = std::make_unique<onirique::license::Overlay> (JucePlugin_Name, p.license);
     addAndMakeVisible (*licenseOverlay);
+   #if ONIRIQUE_UI_TEST
+    // essais locaux uniquement (jamais dans les versions publiées) : captures sans la page d'activation
+    if (juce::SystemStats::getEnvironmentVariable ("ONIRIQUE_UI_TEST", {}).contains ("nolicense"))
+        licenseOverlay->setVisible (false);
+   #endif
    #endif
 
     // taille d'ouverture : la règle commune des plugins ONIRIQUE (GUI/OniriqueWindowSize.h)
