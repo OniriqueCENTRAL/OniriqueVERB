@@ -1421,6 +1421,10 @@ OniriqueReverbEditor::OniriqueReverbEditor (OniriqueReverbProcessor& p)
     setSize (w, juce::roundToInt ((float) w * baseHeight / baseWidth));
     sizeRestored = true;
 
+   #if ONIRIQUE_UI_TEST
+    // essais locaux uniquement : ONIRIQUE_UI_TEST=static fige les animations (visuel de démo : chaque bouton ne redessine que lui-même)
+    if (juce::SystemStats::getEnvironmentVariable ("ONIRIQUE_UI_TEST", {}).contains ("static")) { refreshDisplays (0.0); return; }
+   #endif
     startTimerHz (30);
 }
 
