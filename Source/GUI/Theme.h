@@ -9,23 +9,22 @@ namespace onirique::ui
 //==============================================================================
 //  Charte ONIRIQUE, reprise du site : nuit et sang, braise, sigil incandescent,
 //  étoiles à quatre branches. Toutes les couleurs de l'interface viennent d'ici.
-//  Teintes PRO SERIES (celles de VOCAL MINI) : noir profond, charbon neutre, rouge sombre, accent rouge.
 //==============================================================================
 namespace palette
 {
-    inline const juce::Colour night     { 0xff09080a };
-    inline const juce::Colour blood     { 0xff3d0910 };
-    inline const juce::Colour bloodDeep { 0xff1f0609 };
-    inline const juce::Colour deep      { 0xff121012 };
-    inline const juce::Colour deep2     { 0xff1c1517 };
-    inline const juce::Colour mist      { 0xfff2ecec };
-    inline const juce::Colour haze      { 0xff978c8f };
-    inline const juce::Colour ember     { 0xffe5384a };
+    inline const juce::Colour night     { 0xff0d0809 };
+    inline const juce::Colour blood     { 0xff5c0008 };
+    inline const juce::Colour bloodDeep { 0xff2e0306 };
+    inline const juce::Colour deep      { 0xff1a080a };
+    inline const juce::Colour deep2     { 0xff2a0a0e };
+    inline const juce::Colour mist      { 0xfff6eeee };
+    inline const juce::Colour haze      { 0xffa88f92 };
+    inline const juce::Colour ember     { 0xffe23444 };
     inline const juce::Colour emberHot  { 0xffff5a68 };
-    inline const juce::Colour bone      { 0xfffff4f5 };
-    inline const juce::Colour rose      { 0xffffd6da };
+    inline const juce::Colour bone      { 0xffffecee };
+    inline const juce::Colour rose      { 0xffffd2d6 };
 
-    inline juce::Colour line()    { return rose.withAlpha (0.10f); }
+    inline juce::Colour line()    { return rose.withAlpha (0.13f); }
     inline juce::Colour ledOff()  { return rose.withAlpha (0.2f); }
     inline juce::Colour well()    { return juce::Colours::black.withAlpha (0.35f); }
 }
