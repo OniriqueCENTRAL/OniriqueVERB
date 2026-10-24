@@ -7,6 +7,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include "DSP/ReverbEngine.h"
 
+#include <complex>
 #include <cstdio>
 
 using namespace onirique::reverb;
@@ -79,6 +80,109 @@ Params wetOnly (int mode, float decay)
     p.mode = mode; p.mix = 1.0f; p.decay = decay;
     p.eqOut = {};   // EQ OUT neutre
     return p;
+}
+
+// FFT radix 2 sur place (n puissance de 2)
+void fft (std::vector<std::complex<double>>& a)
+{
+    const size_t n = a.size();
+    for (size_t i = 1, j = 0; i < n; ++i)
+    {
+        size_t bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) std::swap (a[i], a[j]);
+    }
+    for (size_t len = 2; len <= n; len <<= 1)
+    {
+        const auto w = std::polar (1.0, -2.0 * 3.141592653589793 / (double) len);
+        for (size_t i = 0; i < n; i += len)
+        {
+            std::complex<double> v (1.0);
+            for (size_t k = 0; k < len / 2; ++k, v *= w)
+            {
+                const auto x = a[i + k], y = a[i + k + len / 2] * v;
+                a[i + k] = x + y; a[i + k + len / 2] = x - y;
+            }
+        }
+    }
+}
+
+// Densité d'échos (Abel & Huang) : temps entre la première réflexion et l'instant où, sur 20 ms, la queue
+// ressemble à un bruit (NED >= 0,9)
+double densityTime (const std::vector<float>& ir)
+{
+    float peak = 0.0f;
+    for (auto v : ir) peak = std::max (peak, std::abs (v));
+    int onset = 0;
+    while (onset < (int) ir.size() && std::abs (ir[(size_t) onset]) < 0.001f * peak) ++onset;
+    const int win = (int) (0.020 * fs);
+    for (int s = onset; s + win < (int) ir.size(); s += (int) (0.001 * fs))
+    {
+        double e = 0.0;
+        for (int i = s; i < s + win; ++i) e += (double) ir[(size_t) i] * ir[(size_t) i];
+        const double sigma = std::sqrt (e / win);
+        int above = 0;
+        for (int i = s; i < s + win; ++i) above += std::abs (ir[(size_t) i]) > sigma;
+        if ((double) above / win / 0.3173 >= 0.9) return (double) (s + win / 2 - onset) / fs;
+    }
+    return -1.0;
+}
+
+// Coloration (sonnerie métallique) : écart type, de 200 Hz à 8 kHz, entre le spectre moyen de la queue
+// et sa version lissée au tiers d'octave. Plus c'est haut, plus des résonances ressortent.
+double coloration (const std::vector<float>& ir, int from, int to)
+{
+    constexpr int N = 4096;
+    std::vector<double> avg (N / 2, 0.0);
+    int frames = 0;
+    for (int s = from; s + N <= to; s += N / 4, ++frames)
+    {
+        std::vector<std::complex<double>> a (N);
+        double e = 0.0;
+        for (int i = 0; i < N; ++i)
+        {
+            const double w = 0.5 - 0.5 * std::cos (2.0 * 3.141592653589793 * i / N);
+            a[(size_t) i] = ir[(size_t) (s + i)] * w;
+            e += std::norm (a[(size_t) i]);
+        }
+        fft (a);
+        for (int k = 0; k < N / 2; ++k) avg[(size_t) k] += std::norm (a[(size_t) k]) / (e + 1.0e-30);
+    }
+    std::vector<double> db (N / 2);
+    for (int k = 1; k < N / 2; ++k) db[(size_t) k] = 10.0 * std::log10 (avg[(size_t) k] / std::max (1, frames) + 1.0e-30);
+    double sum = 0.0, sum2 = 0.0;
+    int count = 0;
+    for (int k = (int) (200.0 * N / fs); k < (int) (8000.0 * N / fs); ++k)
+    {
+        const int lo = std::max (1, (int) (k / 1.1225)), hi = std::min (N / 2 - 1, (int) (k * 1.1225) + 1);
+        double sm = 0.0;
+        for (int j = lo; j <= hi; ++j) sm += db[(size_t) j];
+        const double d = db[(size_t) k] - sm / (hi - lo + 1);
+        sum += d; sum2 += d * d; ++count;
+    }
+    const double mean = sum / count;
+    return std::sqrt (sum2 / count - mean * mean);
+}
+
+double correlation (const std::vector<float>& a, const std::vector<float>& b, int from, int to)
+{
+    double xy = 0.0, xx = 0.0, yy = 0.0;
+    for (int i = from; i < to; ++i) { xy += (double) a[(size_t) i] * b[(size_t) i]; xx += (double) a[(size_t) i] * a[(size_t) i]; yy += (double) b[(size_t) i] * b[(size_t) i]; }
+    return xy / std::sqrt (xx * yy + 1.0e-30);
+}
+
+// temps de queue dans une bande (quatre passe-bande en série autour de hz : les bandes voisines ne s'y mêlent pas)
+double bandRt60 (const std::vector<float>& ir, double hz)
+{
+    std::vector<float> x (ir);
+    for (int stage = 0; stage < 4; ++stage)
+    {
+        onirique::Biquad bp;
+        bp.setCoeffs (onirique::BiquadCoeffs::bandpass (fs, hz, 1.4));
+        for (auto& v : x) v = bp.process (v, 0);
+    }
+    return rt60 (x);
 }
 } // namespace
 
@@ -284,6 +388,98 @@ int main (int argc, char** argv)
             level[c] = rmsDb (out, (int) fs, (int) (3.0 * fs));
         }
         check (level[1] - level[0] > 9.0, "EQ OUT aigu +12 dB : queue aigue renforcee", level[1] - level[0], "dB");
+    }
+
+    // Mesures de la queue, mode par mode (impulsion, DECAY 2,5 s) ; niveau : la reverb seule sous un bruit continu
+    std::printf ("\n%-10s %9s %9s %9s %9s %9s %9s %9s\n", "", "densite", "couleur", "corr L/R", "RT 125", "RT 1k", "RT 4k", "niveau");
+    struct Verdict { const char* mode; bool dense, decayRight, bassShorter, smooth; };
+    std::vector<Verdict> verdicts;
+    for (int mode = 0; mode < numModes; ++mode)
+    {
+        auto p = wetOnly (mode, 2.5f);
+        p.preDelayMs = 0.0f;
+        // densité : moyenne sur cinq impulsions (la modulation n'est jamais au même endroit)
+        double density = 0.0;
+        for (int shot = 0; shot < 5; ++shot)
+        {
+            e.prepare (fs, p);
+            std::vector<float> in ((size_t) (fs * 1.5), 0.0f), Rs;
+            in[(size_t) (100 + shot * 4567)] = 1.0f;
+            const auto Ls = run (e, in, &Rs);
+            std::vector<float> Ms (Ls.size());
+            for (size_t i = 0; i < Ls.size(); ++i) Ms[i] = 0.5f * (Ls[i] + Rs[i]);
+            density += densityTime (Ms) / 5.0;
+        }
+        e.prepare (fs, p);
+        std::vector<float> in ((size_t) (fs * 4.0), 0.0f), R;
+        in[100] = 1.0f;
+        const auto L = run (e, in, &R);
+        std::vector<float> M (L.size());
+        for (size_t i = 0; i < L.size(); ++i) M[i] = 0.5f * (L[i] + R[i]);
+        e.prepare (fs, p);
+        const auto loud = run (e, noise ((int) (fs * 3.0), 0.2f, 31));
+        const double rtLo = bandRt60 (M, 125.0), rtMid = bandRt60 (M, 1000.0), color = coloration (M, (int) (0.15 * fs), (int) (1.4 * fs));
+        std::printf ("%-10s %7.1f ms %6.2f dB %9.2f %7.2f s %7.2f s %7.2f s %6.1f dB\n", modeNames[mode], 1000.0 * density,
+                     color, correlation (L, R, (int) (0.05 * fs), (int) (1.5 * fs)),
+                     rtLo, rtMid, bandRt60 (M, 4000.0), rmsDb (loud, (int) fs, (int) (3.0 * fs)));
+        verdicts.push_back ({ modeNames[mode], density < (mode == hall ? 0.1 : 0.06), std::abs (rtMid / 2.5 - 1.0) < 0.1,
+                              rtLo < rtMid, color < 1.5 });
+    }
+    for (const auto& v : verdicts)
+    {
+        char label[96];
+        std::snprintf (label, sizeof (label), "%s : dense, DECAY juste, graves courts, sans resonance", v.mode);
+        check (v.dense && v.decayRight && v.bassShorter && v.smooth, label, 0.0, "");
+    }
+
+    // Entrée stéréo : une source à gauche seulement garde sa place (premiers instants, puis queue)
+    {
+        auto p = wetOnly (hall, 2.5f);
+        p.preDelayMs = 0.0f;
+        e.prepare (fs, p);
+        auto L = noise ((int) (fs * 3.0), 0.3f, 21);
+        std::fill (L.begin() + (int) fs, L.end(), 0.0f);
+        std::vector<float> R (L.size(), 0.0f);
+        for (int pos = 0; pos < (int) L.size(); pos += 256)
+        {
+            float* ch[2] { L.data() + pos, R.data() + pos };
+            e.process (ch, 2, std::min (256, (int) L.size() - pos), 120.0, -1.0);
+        }
+        const auto side = [&] (double a, double b) { return rmsDb (L, (int) (a * fs), (int) (b * fs)) - rmsDb (R, (int) (a * fs), (int) (b * fs)); };
+        check (side (0.3, 1.0) > 2.0, "Source a gauche : la reverb penche a gauche (gauche / droite)", side (0.3, 1.0), "dB");
+        check (std::abs (side (1.2, 2.5)) < 1.5, "Source a gauche : la queue finit au centre (gauche / droite)", side (1.2, 2.5), "dB");
+    }
+
+    // Changer de mode et tirer SIZE pendant la queue : pas de clic (le plus grand saut d'un échantillon au suivant
+    // reste du même ordre que sans aucun changement)
+    {
+        double jump[2] {};
+        for (int moving = 0; moving < 2; ++moving)
+        {
+            auto p = wetOnly (plate1, 3.0f);
+            e.prepare (fs, p);
+            const auto out = run (e, noise ((int) (fs * 6.0), 0.2f, 41), nullptr, [&] (Engine& en, int block)
+            {
+                if (! moving) return;
+                auto q = wetOnly ((block / 90) % numModes, 3.0f);    // un mode toutes les 0,48 s
+                q.size = 0.5f + 0.5f * (float) std::sin (block * 0.05);  // SIZE qui bouge sans cesse
+                en.set (q);
+            });
+            for (size_t i = (size_t) fs; i < out.size(); ++i) jump[moving] = std::max (jump[moving], (double) std::abs (out[i] - out[i - 1]));
+        }
+        check (jump[1] < 1.6 * jump[0], "Modes et SIZE qui changent : plus grand saut / sans changement", jump[1] / jump[0], "x");
+    }
+
+    // Charge : 20 s de stéréo, ONIRIQUE, modulation à fond
+    {
+        auto p = wetOnly (dream, 6.0f);
+        p.modDepth = 1.0f;
+        e.prepare (fs, p);
+        const auto in = noise ((int) (fs * 20.0), 0.2f, 23);
+        const auto t0 = juce::Time::getHighResolutionTicks();
+        run (e, in);
+        const double sec = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - t0);
+        std::printf ("Charge : %.0f x temps reel (%.1f ns par echantillon)\n\n", 20.0 / sec, sec * 1.0e9 / (20.0 * fs));
     }
 
     // Voix réelle : un fichier par mode, et la crête de sortie
