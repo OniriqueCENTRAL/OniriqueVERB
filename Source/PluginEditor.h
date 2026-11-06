@@ -5,6 +5,7 @@
 #include "PluginProcessor.h"
 #include "GUI/Theme.h"
 #include "License/OniriqueThemeButton.h"
+#include "GUI/OniriqueBar.h"   // la barre « Nuit » de VOCALBOX
 
 // Le potard de VERB et les menus aux couleurs de l'instrument.
 class ReverbLook : public juce::LookAndFeel_V4
@@ -265,4 +266,9 @@ private:
     std::unique_ptr<onirique::license::Overlay> licenseOverlay;
     juce::TooltipWindow tooltips { this, 600 };
     bool sizeRestored = false;
+
+    // la barre « Nuit » (presets, IN, A/B, copier/coller, menu ⋯ avec la couleur de l'interface), au-dessus de la façade
+    static constexpr int kTop = 50;
+    static juce::Image barSigil();
+    onirique::nuit::Bar bar { proc.nuit, proc.apvts, "VERB", barSigil(), baseWidth, baseWidth };
 };

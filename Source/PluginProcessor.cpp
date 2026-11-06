@@ -9,6 +9,45 @@ OniriqueReverbProcessor::OniriqueReverbProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "STATE", createLayout())
 {
+    nuit.keep = [this] (const juce::String& id) { return id == onirique::ids::mix && presets.isMixLocked(); };
+    apvts.state.setProperty ("preset", "Init", nullptr);
+    importOldPresets();
+}
+
+std::vector<onirique::PresetBank::Stock> OniriqueReverbProcessor::nuitStock()
+{
+    std::vector<onirique::PresetBank::Stock> list;
+    for (const auto& f : onirique::PresetManager::factory())
+    {
+        onirique::PresetBank::Stock s;
+        s.name = f.name;
+        s.tags = 0;
+        for (const auto& [id, value] : f.values)
+            s.values.push_back ({ id, value });
+        list.push_back (std::move (s));
+    }
+    return list;
+}
+
+/** Les presets de l'utilisateur d'avant (.orvpreset) recopiés au format de la barre (.reverb), une fois ; les anciens
+    fichiers restent où ils sont. */
+void OniriqueReverbProcessor::importOldPresets()
+{
+    const auto folder = onirique::PresetManager::folder();
+    for (const auto& file : folder.findChildFiles (juce::File::findFiles, false, "*.orvpreset"))
+    {
+        const auto target = folder.getChildFile (file.getFileNameWithoutExtension() + nuit.getExtension());
+        if (target.existsAsFile())
+            continue;
+        if (auto xml = juce::XmlDocument::parse (file))
+        {
+            juce::ValueTree snapshot ("Snapshot");
+            for (auto* p : xml->getChildWithTagNameIterator ("PARAM"))
+                snapshot.setProperty (p->getStringAttribute ("id"), p->getDoubleAttribute ("value"), nullptr);
+            if (auto out = snapshot.createXml())
+                out->writeTo (target);
+        }
+    }
 }
 
 reverb::Params OniriqueReverbProcessor::readParams() const noexcept
@@ -125,7 +164,9 @@ juce::AudioProcessorEditor* OniriqueReverbProcessor::createEditor()
 
 void OniriqueReverbProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    nuit.writeState (state);   // le côté A/B écouté, et l'autre
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, dest);
 }
 
@@ -134,7 +175,12 @@ void OniriqueReverbProcessor::setStateInformation (const void* data, int size)
     if (auto xml = getXmlFromBinary (data, size))
         if (xml->hasTagName (apvts.state.getType()))
         {
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+            auto state = juce::ValueTree::fromXml (*xml);
+            // un projet d'avant la barre « Nuit » : le nom de son preset passe à la nouvelle propriété
+            if (! state.hasProperty ("preset") && state.hasProperty ("presetName"))
+                state.setProperty ("preset", state.getProperty ("presetName"), nullptr);
+            nuit.readState (state);
+            apvts.replaceState (state);
             presets.takeSnapshot();   // l'état rechargé sert de référence pour l'indicateur "modifié"
         }
 }

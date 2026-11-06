@@ -1440,6 +1440,8 @@ struct OniriqueReverbEditor::Content : public juce::Component
             addAndMakeVisible (c);
 
         lock.setToggleState (p.presets.isMixLocked(), juce::dontSendNotification);
+        presetBar.setVisible (false);   // les presets : la barre « Nuit »
+        bypass.setVisible (false);      // marche / arrêt : IN dans la barre
         lock.onClick = [this] { proc.presets.setMixLocked (lock.getToggleState()); };
 
         sigil = juce::ImageCache::getFromMemory (BinaryData::sigil_png, BinaryData::sigil_pngSize);
@@ -1507,17 +1509,7 @@ struct OniriqueReverbEditor::Content : public juce::Component
         }
         g.drawImageAt (daBackdrop, 0, 0);
 
-        // la marque : le sigil, ONIRIQUE sérigraphié, « Verb » en gothique couleur braise
-        g.setOpacity (1.0f);
-        g.drawImage (sigil, juce::Rectangle<float> (22.0f, 16.0f, 30.0f, 30.0f), juce::RectanglePlacement::centred);
-        const auto brand = fonts->displayFont (15.0f, 0.14f);
-        g.setFont (brand);
-        g.setColour (pal::ink.withAlpha (0.92f));
-        g.drawText ("ONIRIQUE", juce::Rectangle<float> (62.0f, 16.0f, 200.0f, 30.0f), juce::Justification::centredLeft, false);
-        const float bw = juce::GlyphArrangement::getStringWidth (brand, "ONIRIQUE");
-        g.setFont (fonts->dreamFont (33.0f));
-        g.setColour (pal::ember);
-        g.drawText ("Verb", juce::Rectangle<float> (62.0f + bw + 10.0f, 8.0f, 120.0f, 40.0f), juce::Justification::centredLeft, false);
+        // la marque et les presets sont dans la barre « Nuit » au-dessus
 
         groove (g, 0.0f, 62.0f, b.getRight(), 62.0f);
 
@@ -1601,17 +1593,20 @@ OniriqueReverbEditor::OniriqueReverbEditor (OniriqueReverbProcessor& p)
     addAndMakeVisible (*content);
 
    #if ! ONIRIQUE_TEST_BUILD   // la version d'essai locale n'a pas de licence
+    addAndMakeVisible (bar);
+    bar.onThemeChanged = [this] { themeSeen = -1; };
     licenseOverlay = std::make_unique<onirique::license::Overlay> (JucePlugin_Name, p.license);
     addAndMakeVisible (*licenseOverlay);
    #endif
 
     // taille d'ouverture : la règle commune des plugins ONIRIQUE (GUI/OniriqueWindowSize.h)
-    const int w = onirique::window::openingSize (p.apvts.state, JucePlugin_Name, { baseWidth, baseHeight },
-                                                 { baseWidth * 6 / 10, baseHeight * 6 / 10 }, { baseWidth * 2, baseHeight * 2 }).x;
+    constexpr int fullHeight = baseHeight + kTop;   // la façade et la barre au-dessus
+    const int w = onirique::window::openingSize (p.apvts.state, JucePlugin_Name, { baseWidth, fullHeight },
+                                                 { baseWidth * 6 / 10, fullHeight * 6 / 10 }, { baseWidth * 2, fullHeight * 2 }).x;
     setResizable (true, true);
-    getConstrainer()->setFixedAspectRatio ((double) baseWidth / (double) baseHeight);
-    setResizeLimits (baseWidth * 6 / 10, baseHeight * 6 / 10, baseWidth * 2, baseHeight * 2);
-    setSize (w, juce::roundToInt ((float) w * baseHeight / baseWidth));
+    getConstrainer()->setFixedAspectRatio ((double) baseWidth / (double) fullHeight);
+    setResizeLimits (baseWidth * 6 / 10, fullHeight * 6 / 10, baseWidth * 2, fullHeight * 2);
+    setSize (w, juce::roundToInt ((float) w * fullHeight / baseWidth));
     sizeRestored = true;
 
    #if ONIRIQUE_UI_TEST
@@ -1635,23 +1630,24 @@ void OniriqueReverbEditor::paint (juce::Graphics& g)
     g.fillAll (pal::plateBottom);
 }
 
+juce::Image OniriqueReverbEditor::barSigil()
+{
+    return juce::ImageCache::getFromMemory (BinaryData::sigil_png, BinaryData::sigil_pngSize);
+}
+
 void OniriqueReverbEditor::resized()
 {
-    if (themeButton.getParentComponent() == nullptr) addAndMakeVisible (themeButton);
-    themeButton.setBounds (juce::roundToInt (1134 * (float) getWidth() / (float) baseWidth), juce::roundToInt (18 * (float) getWidth() / (float) baseWidth), juce::roundToInt (38 * (float) getWidth() / (float) baseWidth), juce::roundToInt (26 * (float) getWidth() / (float) baseWidth));
-    themeButton.toFront (false);
     if (content == nullptr)
         return;
 
     const float scale = (float) getWidth() / (float) baseWidth;
     content->setTransform (juce::AffineTransform::scale (scale));
-    content->setBounds (0, 0, baseWidth, baseHeight);
+    content->setBounds (0, kTop, baseWidth, baseHeight);   // sous la barre « Nuit »
 
+    bar.setPillWidth (licenseOverlay != nullptr ? licenseOverlay->pillWidth() : 0);
+    bar.place (scale, getLocalBounds());
     if (licenseOverlay != nullptr)
-    {
-        const int width = licenseOverlay->pillWidth();
-        licenseOverlay->fit (getLocalBounds(), scale, { 1076 - width, 16, width, 30 });
-    }
+        licenseOverlay->fit (getLocalBounds(), scale, bar.getPillArea(), juce::Justification::centredRight);
     if (sizeRestored) onirique::window::remember (proc.apvts.state, getWidth(), getHeight());   // taille gardée avec le projet
 }
 

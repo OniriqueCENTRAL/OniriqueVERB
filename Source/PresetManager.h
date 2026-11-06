@@ -121,7 +121,7 @@ public:
         for (auto* p : params()) snapshot.push_back (p->getValue());
     }
 
-private:
+public:   // la barre « Nuit » (PresetBank) reprend les presets d'usine d'ici
     struct Factory { juce::String name; std::map<juce::String, float> values; };
 
     std::vector<juce::RangedAudioParameter*> params() const

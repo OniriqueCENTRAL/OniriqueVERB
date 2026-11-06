@@ -5,6 +5,7 @@
 #include "License/LicenseGuard.h"
 #include "Parameters.h"
 #include "PresetManager.h"
+#include "GUI/OniriquePresets.h"
 #include "DSP/ReverbEngine.h"
 
 class OniriqueReverbProcessor : public juce::AudioProcessor
@@ -41,6 +42,14 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
     onirique::PresetManager presets { apvts };
+
+    /** Les presets de la barre « Nuit » : ceux d'usine (PresetManager), ceux de l'utilisateur (Onirique/Reverb/Presets,
+        .reverb ; les anciens .orvpreset y sont convertis au premier lancement) et la comparaison A/B. Bypass, INFINITE et
+        le tempo restent des réglages de session ; le MIX verrouillé (cadenas) garde sa valeur. */
+    static std::vector<onirique::PresetBank::Stock> nuitStock();
+    onirique::PresetBank nuit { apvts, "Reverb", nuitStock(), {},
+                                { onirique::ids::bypass, onirique::ids::freeze, onirique::ids::bpmSource, onirique::ids::bpm } };
+    void importOldPresets();
 
     // ---- lus par l'interface (thread GUI)
     const onirique::reverb::Engine& getEngine() const noexcept { return engine; }
