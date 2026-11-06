@@ -1,4 +1,15 @@
 #pragma once
+#if __has_include ("ui/OniriqueTheme.h")
+ #include "ui/OniriqueTheme.h"
+#elif __has_include ("UI/OniriqueTheme.h")
+ #include "UI/OniriqueTheme.h"
+#elif __has_include ("GUI/OniriqueTheme.h")
+ #include "GUI/OniriqueTheme.h"
+#elif __has_include ("../License/OniriqueTheme.h")
+ #include "../License/OniriqueTheme.h"
+#else
+ #include "OniriqueTheme.h"
+#endif
 
 #include <BinaryData.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -16,24 +27,36 @@ namespace palette
 {
     // la charte ONIRIQUE
     inline const juce::Colour night     { 0xff0d0809 };
-    inline const juce::Colour blood     { 0xff5c0008 };
-    inline const juce::Colour bloodDeep { 0xff2e0306 };
+    inline const juce::Colour& blood = onirique::look::litTop;
+    inline const juce::Colour& bloodDeep = onirique::look::litBottom;
     inline const juce::Colour mist      { 0xfff6eeee };
     inline const juce::Colour haze      { 0xffa88f92 };
-    inline const juce::Colour ember     { 0xffe23444 };
-    inline const juce::Colour emberHot  { 0xffff5a68 };
+    inline const juce::Colour& ember = onirique::look::emberBar;
+    inline const juce::Colour& emberHot = onirique::look::emberLit;
     inline const juce::Colour bone      { 0xffffecee };
     inline const juce::Colour rose      { 0xffffd2d6 };
 
     // la façade
-    inline const juce::Colour plateTop    { 0xff231615 };
-    inline const juce::Colour plateBottom { 0xff110a0a };
+    inline juce::Colour plateTop    { 0xff231615 };
+    inline juce::Colour plateBottom { 0xff110a0a };
     inline const juce::Colour ink         { 0xffeadcd9 };   // sérigraphie
-    inline const juce::Colour inkDim      { 0xff98817f };
-    inline const juce::Colour metalHi     { 0xff352c2b };   // capuchons, jupes des potards
-    inline const juce::Colour metalLo     { 0xff0c0909 };
-    inline const juce::Colour glass       { 0xff080404 };   // fond des affichages
-    inline const juce::Colour ledOff      { 0xff2c1517 };
+    inline juce::Colour inkDim      { 0xff98817f };
+    inline juce::Colour metalHi     { 0xff352c2b };   // capuchons, jupes des potards
+    inline juce::Colour metalLo     { 0xff0c0909 };
+    inline juce::Colour glass       { 0xff080404 };   // fond des affichages
+    inline juce::Colour ledOff      { 0xff2c1517 };
+
+    /** La façade suit la couleur de l'interface (même luminosité) : rappelée quand la teinte est chargée ou change. */
+    inline void refreshPalette()
+    {
+        plateTop = onirique::look::tint (0xff231615);
+        plateBottom = onirique::look::tint (0xff110a0a);
+        inkDim = onirique::look::tint (0xff98817f);
+        metalHi = onirique::look::tint (0xff352c2b);
+        metalLo = onirique::look::tint (0xff0c0909);
+        glass = onirique::look::tint (0xff080404);
+        ledOff = onirique::look::tint (0xff2c1517);
+    }
 }
 
 /** Les quatre familles de la charte : Unbounded (la marque), Grenze Gotisch (« Verb »),

@@ -4,6 +4,7 @@
 #include "License/LicenseOverlay.h"
 #include "PluginProcessor.h"
 #include "GUI/Theme.h"
+#include "License/OniriqueThemeButton.h"
 
 // Le potard de VERB et les menus aux couleurs de l'instrument.
 class ReverbLook : public juce::LookAndFeel_V4
@@ -243,7 +244,20 @@ public:
 
 private:
     struct Content;
-    void timerCallback() override { refreshDisplays (1.0 / 30.0); }
+    void timerCallback() override
+    {
+        // la couleur de l'interface (menu ⋯, ou changée dans un autre plugin ONIRIQUE) : tout se redessine
+        if (onirique::look::changedSince (themeSeen))
+        {
+            onirique::ui::palette::refreshPalette();   // la façade dans la nouvelle teinte
+            std::function<void (juce::Component&)> all = [&all] (juce::Component& k) { k.repaint(); for (auto* ch : k.getChildren()) all (*ch); };
+            all (*this);
+        }
+        refreshDisplays (1.0 / 30.0);
+    }
+
+    onirique::look::ThemeButton themeButton;   // ⋯ : la couleur de l'interface
+    int themeSeen = -1;
 
     OniriqueReverbProcessor& proc;
     ReverbLook look;
