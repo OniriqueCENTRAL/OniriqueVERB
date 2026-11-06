@@ -1600,7 +1600,7 @@ OniriqueReverbEditor::OniriqueReverbEditor (OniriqueReverbProcessor& p)
    #endif
 
     // taille d'ouverture : la règle commune des plugins ONIRIQUE (GUI/OniriqueWindowSize.h)
-    constexpr int fullHeight = baseHeight + kTop;   // la façade et la barre au-dessus
+    constexpr int fullHeight = baseHeight + kTop - kCut;   // la barre, puis la façade sans son ancien en-tête
     const int w = onirique::window::openingSize (p.apvts.state, JucePlugin_Name, { baseWidth, fullHeight },
                                                  { baseWidth * 6 / 10, fullHeight * 6 / 10 }, { baseWidth * 2, fullHeight * 2 }).x;
     setResizable (true, true);
@@ -1642,12 +1642,23 @@ void OniriqueReverbEditor::resized()
 
     const float scale = (float) getWidth() / (float) baseWidth;
     content->setTransform (juce::AffineTransform::scale (scale));
-    content->setBounds (0, kTop, baseWidth, baseHeight);   // sous la barre « Nuit »
+    content->setBounds (0, kTop - kCut, baseWidth, baseHeight);   // sous la barre « Nuit », son ancien en-tête caché dessous
 
-    bar.setPillWidth (licenseOverlay != nullptr ? licenseOverlay->pillWidth() : 0);
+    // dans la barre, à droite : SYNC / BPM / DAW, puis la pastille de licence (la place des deux est gardée ensemble)
+    const int pill = licenseOverlay != nullptr ? licenseOverlay->pillWidth() : 0;
+    bar.setPillWidth (kBpmWidth + 10 + pill);
     bar.place (scale, getLocalBounds());
+    const auto area = bar.getPillArea();
+    if (content->bpm.getParentComponent() != this)
+        addAndMakeVisible (content->bpm);   // sorti de la façade, posé sur la barre
+    content->bpm.setTransform (juce::AffineTransform::scale (scale));
+    content->bpm.setBounds (area.getX(), area.getCentreY() - 17, kBpmWidth, 34);
+    content->bpm.toFront (false);
     if (licenseOverlay != nullptr)
-        licenseOverlay->fit (getLocalBounds(), scale, bar.getPillArea(), juce::Justification::centredRight);
+    {
+        licenseOverlay->fit (getLocalBounds(), scale, area.withTrimmedLeft (kBpmWidth + 10), juce::Justification::centredRight);
+        licenseOverlay->toFront (false);
+    }
     if (sizeRestored) onirique::window::remember (proc.apvts.state, getWidth(), getHeight());   // taille gardée avec le projet
 }
 

@@ -269,6 +269,8 @@ private:
 
     // la barre « Nuit » (presets, IN, A/B, copier/coller, menu ⋯ avec la couleur de l'interface), au-dessus de la façade
     static constexpr int kTop = 50;
+    static constexpr int kCut = 62;     // l'ancien en-tête de la façade (marque, presets, tempo), caché sous la barre
+    static constexpr int kBpmWidth = 196;   // SYNC / BPM / DAW, rangés dans la barre à côté de la pastille de licence
     static juce::Image barSigil();
     onirique::nuit::Bar bar { proc.nuit, proc.apvts, "VERB", barSigil(), baseWidth, baseWidth };
 };
