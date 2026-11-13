@@ -24,7 +24,8 @@ jobs:
       - name: Compiler (universel arm64 + x86_64)
         run: |
           cmake -B build -G Xcode
-          cmake --build build --config Release -- -quiet
+          # VST3 et AU seulement : l'app autonome (Standalone) n'est pas publiée et doublait le temps de compilation
+          cmake --build build --config Release --target "${TARGET}_VST3" "${TARGET}_AU" -- -quiet
       - name: Signer (ad hoc) et empaqueter
         run: |
           OUT="build/${TARGET}_artefacts/Release"
